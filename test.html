@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+  </head>
+  <body>
+    <button id="sb">Move On</button>
+    <input type="file" id="asm" />
+    <script src="test.js"></script>
+    <script src="asmparser.js"></script>
+    <script>
+      let str = `add r1 r2
+sub r1 r2
+set r1 20
+sw r1 r2 90
+lw r1 r2 90
+brsm r1 r2 90
+breq r1 r2 90
+jmp 100`;
+      console.log(parse(str));
+      let cpu = new CPU /*
+        [
+          "00100010000000000000000000001011", // SAVE DATA
+          "00100000001000000000000000000000", // BASE ADDR
+          "01100000001100000000000000000001" // SET MEMORY
+        ],*/ /*
+        [
+          "00100000001000000000000000000111",
+          "00100000010000000000000000001000",
+          "10100000001000100000000000001000" //BRSM 00001 00010
+        ],*/ /*[
+          "00100010000000000000000000001011", // SAVE DATA to 10000
+          "00100000001000000000000000000000", // BASE ADDR at 00001
+          "01100000001100000000000000000001", // SET MEMORY rs 00001 rt 10000
+          "10000000001000100000000000000001" //
+        ]*/(
+        /*
+        [
+          "00100000000000000000000000001010",
+          "00100000001000000000000000000101",
+          "01001000000000010000000000000000"
+        ],*/
+
+        [
+          "00100000001000000000000000000111",
+          "00100000010000000000000000000111",
+          "11000000001000100000000000001000" //breq
+        ],
+        /*[
+          "11100000000000000000000000001011"
+        ],*/
+        3
+      );
+      function update() {
+        console.log("UPD");
+        cpu.update();
+        cpu.reg.show();
+        cpu.ram.show();
+      }
+      document.getElementById("sb").onclick = update;
+      let inpt = document.getElementById("asm");
+      inpt.onchange = () => {};
+      console.log("OK");
+    </script>
+  </body>
+</html>
