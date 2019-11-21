@@ -40,7 +40,7 @@ function parse(str) {
     } else if (components[0] == "set") {
       bitstr += "001000";
       let regnum1 = parseInt(components[1].slice(1, components[1].length), 10);
-      bitstr += getRegBit(regnum1) + getRegBit(0) + getImmBit(0);
+      bitstr += getRegBit(regnum1) + getRegBit(0) + getImmBit(components[2]);
     } else if (components[0] == "sw") {
       bitstr += "011000";
       let regnum1 = parseInt(components[1].slice(1, components[1].length), 10);

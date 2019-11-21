@@ -233,8 +233,33 @@ function getBitStr(x) {
   console.log("BIT STR", ret);
   return ret;
 }
+function getHexStr(x) {
+  let ret = "";
+  for (let i = 0; i < 8; i++) {
+    let str = x.slice(i * 4, i * 4 + 4);
+    if (str == "1010") {
+      ret += "A";
+    } else if (str == "1011") {
+      ret += "B";
+    } else if (str == "1100") {
+      ret += "C";
+    } else if (str == "1101") {
+      ret += "D";
+    } else if (str == "1110") {
+      ret += "E";
+    } else if (str == "1111") {
+      ret += "F";
+    } else {
+      ret += parseInt(str, 2);
+    }
+  }
+  return ret;
+}
 class CPU {
   constructor(program, programLength) {
+    this.init(program, programLength);
+  }
+  init(program, programLength) {
     this.pc = new PC();
     this.ir = new IR(program);
     this.regmux = new Mux4();
@@ -250,6 +275,13 @@ class CPU {
     this.microPC = 0;
     this.programLength = programLength;
     this.program = program;
+  }
+  updateInstr() {
+    this.update();
+    while (this.microPC < this.microInstr.length) {
+      this.update();
+    }
+    //this.microPC = 0;
   }
   update() {
     if (this.microPC == this.microInstr.length) {
