@@ -1,10 +1,17 @@
+function cpuLog(content) {
+  let event = new CustomEvent("cpulog", { detail: content });
+  document.dispatchEvent(event);
+}
 class PC {
   constructor() {
     this.PCWR = "0";
     this.Value = "00000000000000000000000000000000";
   }
   update(newValue) {
-    if (this.PCWR == "1") this.Value = newValue;
+    if (this.PCWR == "1") {
+      cpuLog("PC UPDATE TO " + getHexStr(newValue));
+      this.Value = newValue;
+    }
   }
   getValue() {
     return parseInt(this.Value, 2);
@@ -36,6 +43,18 @@ class IR {
   }
   fetchInstr(id) {
     this.Value = this.instrMemory[id];
+    cpuLog(
+      "FETCH INSTRUCTION " +
+        getHexStr(this.Value) +
+        " INSTR " +
+        this.getInstr() +
+        " RS " +
+        this.getRs() +
+        " RT " +
+        this.getRt() +
+        " IMM " +
+        getHexStr(this.getImm())
+    );
   }
 }
 
@@ -87,6 +106,7 @@ class register {
   }
   update(input) {
     if (this.regWR == "1") {
+      cpuLog("UPDATE REGISTER AT " + this.address1 + " TO " + getHexStr(input));
       let pos = parseInt(this.address1, 2);
       this.memory[pos] = input;
     }
@@ -109,12 +129,16 @@ class RAM {
   }
   update(input) {
     if (this.memoryWR == "1") {
+      cpuLog(
+        "UPDATE RAM AT " + getHexStr(this.addrress) + " TO " + getHexStr(input)
+      );
       let pos = parseInt(this.addrress, 2);
       this.memory[pos] = input;
     }
   }
   getOutput() {
     let pos = parseInt(this.addrress, 2);
+    console.log("AAAAAAAAAAAAAAA", this.addrress, pos);
     return this.memory[pos];
   }
   show() {
@@ -132,7 +156,6 @@ class ALU {
     this.state = "0000";
   }
   getOutput(input1, input2) {
-    console.log("ALU STATE", this.state);
     if (this.state == "0001") {
       let ret = input1 + input2;
       if (ret == 0) {
@@ -188,6 +211,9 @@ class pcController {
 }
 
 function controller(instr) {
+  if (instr == "000000") {
+    return ["000000000000"];
+  }
   if (instr == "001000") {
     //SET
     return ["000000000000", "110000000000"];
@@ -235,7 +261,7 @@ function getBitStr(x) {
 }
 function getHexStr(x) {
   let ret = "";
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < x.length / 4; i++) {
     let str = x.slice(i * 4, i * 4 + 4);
     if (str == "1010") {
       ret += "A";
@@ -260,6 +286,7 @@ class CPU {
     this.init(program, programLength);
   }
   init(program, programLength) {
+    cpuLog("INIT CPU");
     this.pc = new PC();
     this.ir = new IR(program);
     this.regmux = new Mux4();
@@ -275,21 +302,18 @@ class CPU {
     this.microPC = 0;
     this.programLength = programLength;
     this.program = program;
+    this.newInstr = true;
   }
   updateInstr() {
     this.update();
-    while (this.microPC < this.microInstr.length) {
+    while (!this.newInstr) {
       this.update();
     }
     //this.microPC = 0;
   }
   update() {
-    if (this.microPC == this.microInstr.length) {
+    if (this.newInstr) {
       let id = this.pc.getValue();
-      if (id >= this.programLength) {
-        console.log("OVER!");
-        return;
-      }
       // Get Instruction
       this.ir.fetchInstr(id);
       this.instr = this.ir.Value;
@@ -297,40 +321,68 @@ class CPU {
       // Get MircoInstruction
       this.microInstr = controller(this.ir.getInstr());
       this.microPC = 0;
+      // STOP
+      if (this.microInstr == "000000000000") {
+        cpuLog("CPU STOP!");
+        return true;
+      }
       //Execute Micro Instruction
+      this.newInstr = false;
       this.executeMircoIsntruction();
     } else {
       //Execute Micro Instruction
       this.executeMircoIsntruction();
     }
+    if (this.microPC == this.microInstr.length) {
+      this.newInstr = true;
+      this.microPC = 0;
+    }
+    return false;
   }
   executeMircoIsntruction() {
-    console.log("mExecute");
+    cpuLog("EXECUTE MICRO INSTRUCTION");
     let instr = this.microInstr[this.microPC];
-    console.log("minstr ", instr);
     this.pc.PCWR = instr[0];
     this.reg.regWR = instr[1];
+    this.ram.memoryWR = instr[2];
+    cpuLog(
+      "SET PCWR " + instr[0] + " REGWR " + instr[1] + " MEMORYWR " + instr[2]
+    );
     this.reg.address1 = this.ir.getRs();
     this.reg.address2 = this.ir.getRt();
-    this.ram.memoryWR = instr[2];
+    cpuLog("SET REG1 " + this.reg.address1 + " REG2 " + this.reg.address2);
     this.pcController.state = instr[3] + instr[4];
+    cpuLog("SET PC MUX CONTROLLER " + this.pcController.state);
     this.regmux.sign = instr[5] + instr[6];
     this.alumux.sign = instr[7];
+    cpuLog("SET REG MUX " + this.regmux.sign);
+    cpuLog("SET ALU MUX " + this.alumux.sign);
     this.pcmux.input2 = this.ir.getImm();
     this.alu.state = instr.slice(8, 12);
-    let op1 = parseInt(this.reg.getOutput1(), 2);
-    let op2t = parseInt(this.reg.getOutput2(), 2);
+    cpuLog("SET ALU STATE " + this.alu.state);
+    let op1t = parseInt(this.reg.getOutput1(), 2);
+    let op2 = parseInt(this.reg.getOutput2(), 2);
+    cpuLog(
+      "REGISTER OUTPUT1 " + getHexStr(op1t) + " OUTPUT2 " + getHexStr(op2)
+    );
     let imm = parseInt(this.ir.getImm(), 2);
-    console.log("op2t", op2t, "imm", imm);
-    this.alumux.input1 = op2t;
+    console.log("op1t", op1t, "imm", imm);
+    this.alumux.input1 = op1t;
     this.alumux.input2 = imm;
-    let op2 = this.alumux.getOutput();
+    let op1 = this.alumux.getOutput();
     let aluOtp = this.alu.getOutput(op1, op2);
     console.log("op1", op1, "op2", op2, "aluOtp", aluOtp);
-    //ATTENTION!!! NUM IS NOT A STRING!!!
     let numstr = getBitStr(aluOtp);
+    cpuLog(
+      "ALU INPUT1 " +
+        getBitStr(op1) +
+        " INPUT2 " +
+        getBitStr(op2) +
+        " OUTPUT " +
+        getHexStr(numstr)
+    );
     this.ram.addrress = numstr;
-    this.ram.update(this.reg.getOutput2());
+    this.ram.update(this.reg.getOutput1());
     let ramOtpData = this.ram.getOutput();
     console.log("ramOtp", ramOtpData);
     this.regmux.input1 = this.ir.getImm();
@@ -345,7 +397,7 @@ class CPU {
     let tpcValue = parseInt(this.pc.Value, 2) + parseInt(pcmuxOtp, 2);
     console.log("tpcValue", tpcValue);
     let pcValue = getBitStr(tpcValue);
-    this.pc.update(pcValue); //ATTENTION !!! TYPE NOT MATCH!!!
+    this.pc.update(pcValue);
     this.microPC++;
     console.log("mPC: ", this.microPC, " PC: ", this.pc.Value);
   }

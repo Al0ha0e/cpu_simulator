@@ -22,9 +22,9 @@
         <div id="instrs">查看指令</div>
       </div>
       <div id="memoryInspector">
-        查看并修改寄存器
+        <button id="modeSelect">查看并修改内存</button>
       </div>
-      <div id="waveInspector">233</div>
+      <div id="waveInspector">CPU状态输出</div>
     </div>
     <script src="./test.js"></script>
     <script src="asmparser.js"></script>
@@ -34,8 +34,74 @@
       let instrInspector = document.getElementById("instrs");
       let microInstrInspector = document.getElementById("mInstrs");
       let memoryInspector = document.getElementById("memoryInspector");
+      let cpulogger = document.getElementById("waveInspector");
       let microStart = [];
       let regs = [];
+      let ram = [];
+      //log
+      document.addEventListener("cpulog", e => {
+        let logitem = document.createElement("div");
+        logitem.style.fontSize = "12px";
+        logitem.innerHTML = e.detail;
+        cpulogger.appendChild(logitem);
+        cpulogger.scrollTop = cpulogger.scrollHeight;
+      });
+      //memory
+      for (let i = 0; i < 64; i++) {
+        let mem = document.createElement("div");
+        mem.innerHTML = i.toString() + (i > 9 ? "" : "&nbsp;&nbsp;");
+        let inpt = document.createElement("input");
+        inpt.value = getHexStr(cpu.ram.memory[i]);
+        inpt.style.width = "100px";
+        mem.appendChild(inpt);
+        let changebtn = document.createElement("button");
+        changebtn.innerHTML = "修改";
+        let t = i;
+        changebtn.onclick = () => {
+          //check value
+          let val = parseInt(inpt.value, 16);
+          cpu.ram.memory[t] = getBitStr(val);
+        };
+        mem.appendChild(changebtn);
+        ram.push(mem);
+      }
+      (function() {
+        //PC
+        let regpc = document.createElement("div");
+        regpc.innerHTML = "pc" + "&nbsp;";
+        let inpt1 = document.createElement("input");
+        inpt1.value = getHexStr(cpu.pc.Value);
+        inpt1.style.width = "100px";
+        regpc.appendChild(inpt1);
+        let changebtn1 = document.createElement("button");
+        changebtn1.innerHTML = "修改";
+        changebtn1.onclick = () => {
+          //check value
+          let val = parseInt(inpt1.value, 16);
+          cpu.pc.Value = getBitStr(val);
+        };
+        regpc.appendChild(changebtn1);
+        regs.push(regpc);
+        memoryInspector.appendChild(regpc);
+        //IR
+        let regir = document.createElement("div");
+        regir.innerHTML = "ir" + "&nbsp;&nbsp;&nbsp;";
+        let inpt2 = document.createElement("input");
+        inpt2.value = getHexStr(cpu.ir.Value);
+        inpt2.style.width = "100px";
+        regir.appendChild(inpt2);
+        let changebtn2 = document.createElement("button");
+        changebtn2.innerHTML = "修改";
+        changebtn2.onclick = () => {
+          //check value
+          let val = parseInt(inpt2.value, 16);
+          cpu.ir.Value = getBitStr(val);
+        };
+        regir.appendChild(changebtn2);
+        regs.push(regir);
+        memoryInspector.appendChild(regir);
+      })();
+      //reg
       for (let i = 0; i < 32; i++) {
         let reg = document.createElement("div");
         reg.innerHTML = "r" + i.toString() + (i > 9 ? "" : "&nbsp;&nbsp;");
@@ -48,43 +114,87 @@
         let t = i;
         changebtn.onclick = () => {
           //check value
-          cpu.reg.memory[t] = inpt.value;
-          cpu.reg.show();
+          let val = parseInt(inpt.value, 16);
+          cpu.reg.memory[t] = getBitStr(val);
         };
         reg.appendChild(changebtn);
         regs.push(reg);
         memoryInspector.appendChild(reg);
       }
+      let modeSelect = document.getElementById("modeSelect");
+      modeSelect.onclick = () => {
+        if (modeSelect.innerHTML == "查看并修改内存") {
+          for (let i = 0; i < 34; i++) memoryInspector.removeChild(regs[i]);
+          for (let i = 0; i < 64; i++) memoryInspector.appendChild(ram[i]);
+          modeSelect.innerHTML = "查看并修改寄存器";
+        } else {
+          for (let i = 0; i < 64; i++) memoryInspector.removeChild(ram[i]);
+          for (let i = 0; i < 34; i++) memoryInspector.appendChild(regs[i]);
+          modeSelect.innerHTML = "查看并修改内存";
+        }
+      };
       let asm = document.getElementById("asm");
       asm.onchange = () => {
         let files = asm.files;
         let fr = new FileReader();
         fr.readAsText(files[0]);
         fr.onload = () => {
+          while (cpulogger.childNodes.length > 1)
+            cpulogger.removeChild(cpulogger.childNodes[1]);
           loadInstr(fr.result);
+          regs[0].childNodes[1].value = getHexStr(cpu.pc.Value);
+          regs[1].childNodes[1].value = getHexStr(cpu.ir.Value);
+          for (let i = 0; i < 32; i++) {
+            regs[i + 2].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
+          }
+          for (let i = 0; i < 64; i++)
+            ram[i].childNodes[1].value = getHexStr(cpu.ram.memory[i]);
         };
       };
+      let premInstrpos = 0;
+      let preInstrpos = 0;
       //clear
       document.getElementById("clear").onclick = () => {
+        while (cpulogger.childNodes.length > 1)
+          cpulogger.removeChild(cpulogger.childNodes[1]);
+        instrInspector.childNodes[preInstrpos + 1].style.color = "black";
+        microInstrInspector.childNodes[premInstrpos + 1].style.color = "black";
+        instrInspector.childNodes[1].style.color = "red";
+        microInstrInspector.childNodes[1].style.color = "red";
+        preInstrpos = premInstrpos = 0;
         let instr = cpu.ir.instrMemory;
         cpu = new CPU(instr, instr.length);
+        regs[0].childNodes[1].value = getHexStr(cpu.pc.Value);
+        regs[1].childNodes[1].value = getHexStr(cpu.ir.Value);
         for (let i = 0; i < 32; i++) {
-          regs[i].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
+          regs[i + 2].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
         }
+        for (let i = 0; i < 64; i++)
+          ram[i].childNodes[1].value = getHexStr(cpu.ram.memory[i]);
       };
       //continueRun
       let continueRun = document.getElementById("continue");
       continueRun.onclick = () => {
         let pos = cpu.pc.getValue();
-        while (pos < cpu.programLength) {
-          cpu.update();
+        let over = false;
+        while (!over) {
+          over = cpu.update();
+          regs[0].childNodes[1].value = getHexStr(cpu.pc.Value);
+          regs[1].childNodes[1].value = getHexStr(cpu.ir.Value);
           for (let i = 0; i < 32; i++) {
-            regs[i].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
+            regs[i + 2].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
           }
-          pos = cpu.pc.getValue();
+          for (let i = 0; i < 64; i++)
+            ram[i].childNodes[1].value = getHexStr(cpu.ram.memory[i]);
         }
+        instrInspector.childNodes[preInstrpos + 1].style.color = "black";
+        microInstrInspector.childNodes[premInstrpos + 1].style.color = "black";
+        let len = cpu.ir.instrMemory.length;
+        preInstrpos = len - 1;
+        instrInspector.childNodes[len].style.color = "red";
+        premInstrpos = microStart[len - 1];
+        microInstrInspector.childNodes[premInstrpos + 1].style.color = "red";
       };
-      let premInstrpos = 0;
       //singleRun
       let singleRun = document.getElementById("single");
       singleRun.onclick = () => {
@@ -101,12 +211,17 @@
           alert("程序结束！");
           return;
         }
-        instrInspector.childNodes[cpu.pc.getValue() + 1].style.color = "red";
-        premInstrpos = microStart[cpu.pc.getValue()];
+        preInstrpos = cpu.pc.getValue();
+        instrInspector.childNodes[preInstrpos + 1].style.color = "red";
+        premInstrpos = microStart[preInstrpos];
         microInstrInspector.childNodes[premInstrpos + 1].style.color = "red";
+        regs[0].childNodes[1].value = getHexStr(cpu.pc.Value);
+        regs[1].childNodes[1].value = getHexStr(cpu.ir.Value);
         for (let i = 0; i < 32; i++) {
-          regs[i].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
+          regs[i + 2].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
         }
+        for (let i = 0; i < 64; i++)
+          ram[i].childNodes[1].value = getHexStr(cpu.ram.memory[i]);
       };
       //singleMicroRun
       let singleMicroRun = document.getElementById("singleMicro");
@@ -123,12 +238,17 @@
           alert("程序结束！");
           return;
         }
-        instrInspector.childNodes[cpu.pc.getValue() + 1].style.color = "red";
-        premInstrpos = microStart[cpu.pc.getValue()] + cpu.microPC;
+        preInstrpos = cpu.pc.getValue();
+        instrInspector.childNodes[preInstrpos + 1].style.color = "red";
+        premInstrpos = microStart[preInstrpos] + cpu.microPC;
         microInstrInspector.childNodes[premInstrpos + 1].style.color = "red";
+        regs[0].childNodes[1].value = getHexStr(cpu.pc.Value);
+        regs[1].childNodes[1].value = getHexStr(cpu.ir.Value);
         for (let i = 0; i < 32; i++) {
-          regs[i].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
+          regs[i + 2].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
         }
+        for (let i = 0; i < 64; i++)
+          ram[i].childNodes[1].value = getHexStr(cpu.ram.memory[i]);
       };
       //style
       document.body.style.height = window.innerHeight + "px";
@@ -138,6 +258,12 @@
         document.body.style.width = window.innerWidth + "px";
       };
       function loadInstr(str) {
+        while (instrInspector.childNodes.length > 1) {
+          instrInspector.removeChild(instrInspector.childNodes[1]);
+        }
+        while (microInstrInspector.childNodes.length > 1) {
+          microInstrInspector.removeChild(microInstrInspector.childNodes[1]);
+        }
         let instrs = str.split("\n");
         let bitInstr = parse(str);
         cpu = new CPU(bitInstr, bitInstr.length);
@@ -184,6 +310,7 @@
         "c b";
     }
     #mainScene {
+      grid-area: a;
       border-color: black;
       display: grid;
       grid-template-columns: 50% 50%;
@@ -193,21 +320,41 @@
         "y z";
     }
     #asm {
-      width: 30px;
+      width: 70px;
     }
     #memoryInspector {
+      grid-area: b;
       overflow-y: scroll;
+      border-style: solid;
+      border-width: 0px 0px 0px 1px;
+      border-color: rgb(134, 134, 134);
+      padding-left: 25px;
     }
     #tools {
       grid-area: x;
+      border-style: solid;
+      border-width: 0px 0px 1px 0px;
+      border-color: rgb(134, 134, 134);
     }
     #instrs {
       grid-area: y;
       overflow-y: scroll;
+      border-style: solid;
+      border-width: 0px 1px 0px 0px;
+      border-color: rgb(134, 134, 134);
     }
     #mInstrs {
       grid-area: z;
       overflow-y: scroll;
+      padding-left: 10px;
+    }
+    #waveInspector {
+      grid-area: c;
+      overflow-y: scroll;
+      border-style: solid;
+      border-width: 1px 0px 0px 0px;
+      border-color: rgb(134, 134, 134);
+      padding-bottom: 3px;
     }
   </style>
 </html>

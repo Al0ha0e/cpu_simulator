@@ -77,6 +77,8 @@ function parse(str) {
       bitstr += "111000";
       bitstr +=
         getRegBit(0) + getRegBit(0) + getImmBit(parseInt(components[1]));
+    } else if (components[0] == "stp") {
+      bitstr = "00000000000000000000000000000000";
     }
     ret.push(bitstr);
   }

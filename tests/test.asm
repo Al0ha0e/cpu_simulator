@@ -6,3 +6,4 @@ sw r0 r1 0
 add r0 r10
 jmp -3 
 sw r0 r0 1
+stp
