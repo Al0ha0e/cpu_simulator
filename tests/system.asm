@@ -1,4 +1,4 @@
-set r0 144           goto&irrupt_start_tmp_addr
+set r0 146           goto&irrupt_start_tmp_addr
 set r5 1
 sw r5 r1 16
 set r5 2
@@ -28,7 +28,7 @@ set r6 2
 sw r6 r5 1
 lw r6 r5 2 get_first_char
 set r7 69 ----------------------------------------------------------------------
-breq r7 r6 25 if_first_char==e
+breq r7 r6 26 if_first_char==e
 eirev do_not_irrupt
 lw r4 r5 8
 set r6 8
@@ -52,7 +52,8 @@ addimm r1 r6 0 set_pid
 set r4 16 system_restart_pos
 sw r4 r5 32
 exe
-jmp 150 goto_$copy_reg_back
+set r3 0
+jmp 151 goto_$copy_reg_back
 set r7 81 key_q--------------------------------------------------------------------------
 breq r7 r6 12 else_if_first_char==q
 set r6 81
@@ -67,12 +68,12 @@ set r6 13
 put r6
 stp
 set r7 76 key_l---------------------------------------------------------------------------
-breq r7 r6 24 else_if_first_char==l
+breq r7 r6 25 else_if_first_char==l
 eirev do_not_irrupt
 lw r4 r5 4 r4=get_third_char
 lw r6 r4 -32 get_pid_state
 set r7 2
-breq r6 r7 9 if_pstate==2
+breq r6 r7 10 if_pstate==2
 set r6 1
 sw r6 r4 -32 set_pid_state
 set r6 2
@@ -80,6 +81,7 @@ sw r6 r5 16
 addimm r1 r4 -48 set_pid
 set r4 16 system_restart_pos
 sw r4 r5 32
+set r3 0
 jmp 122 goto_$copy_reg_back
 set r4 69
 put r4
@@ -90,7 +92,7 @@ put r4
 set r4 13
 put r4
 eirev
-jmp -76 go_back_to_$main_loop
+jmp -78 go_back_to_$main_loop
 set r7 80 key_p--------------------------------------------------------------------------
 breq r7 r6 11 else_if_first_char==p
 set r6 0
@@ -102,9 +104,9 @@ addimm r6 r6 1
 jmp -4
 set r6 13
 put r6
-jmp -88 go_back_to_$main_loop
+jmp -90 go_back_to_$main_loop
 set r7 75 key_k--------------------------------------------------------------------------
-breq r7 r6 -90 else_if_first_char==k
+breq r7 r6 -92 else_if_first_char==k
 lw r7 r5 4 r7=get_third_char
 addimm r7 r7 -48
 lw r6 r7 16 get_pid_state
@@ -119,7 +121,7 @@ set r6 82
 put r6
 set r6 13
 put r6
-jmp -105 go_back_to_$main_loop
+jmp -107 go_back_to_$main_loop
 set r6 32 calc_state_pos
 set r8 0
 brsm r8 r7 4 
@@ -141,7 +143,7 @@ set r6 75
 put r6
 set r6 13 
 put r6 ---------------------------------------------------------------------------------
-jmp -127 go_back_to_$main_loop
+jmp -129 go_back_to_$main_loop
 set r4 24           $irrupt_start_tmp_addr
 sw r2 r4 0 pc
 sw r5 r4 1
@@ -218,4 +220,28 @@ lw r8 r4 4
 lw r9 r4 5
 lw r10 r4 6
 lw r11 r4 7
+iret r2 0
+set r4 32 handle_return------------------------------------------------
+set r5 0
+brsm r5 r1 4
+addimm r4 r4 8
+addimm r5 r5 1
+jmp -3
+addimm r5 r4 8
+set r6 0
+brsm r4 r5 4
+sw r6 r4 0
+addimm r4 r4 1
+jmp -3
+set r4 0
+sw r4 r1 16
+lw r5 r4 8
+addimm r5 r5 1
+sw r5 r4 8
+sw r1 r5 0
+set r5 1
+sw r5 r4 16
+lw r2 r4 32
+set r1 0
+set r3 0
 iret r2 0

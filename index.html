@@ -17,6 +17,7 @@
           <button id="continue">连续执行</button>
           <button id="single">单条指令执行</button>
           <button id="singleMicro">单条微指令执行</button>
+          <button id="stop">暂停</button>
         </div>
         <div id="mInstrs">查看微指令</div>
         <div id="instrs">查看指令</div>
@@ -29,271 +30,258 @@
     <script src="./test.js"></script>
     <script src="asmparser.js"></script>
     <script>
-      let cpu = new CPU([], 0);
-      // Memory Inspector
-      let instrInspector = document.getElementById("instrs");
-      let microInstrInspector = document.getElementById("mInstrs");
-      let memoryInspector = document.getElementById("memoryInspector");
-      let cpulogger = document.getElementById("waveInspector");
-      let microStart = [];
-      let regs = [];
-      let ram = [];
-      //log
-      document.addEventListener("cpulog", e => {
-        let logitem = document.createElement("div");
-        logitem.style.fontSize = "12px";
-        logitem.innerHTML = e.detail;
-        cpulogger.appendChild(logitem);
-        cpulogger.scrollTop = cpulogger.scrollHeight;
-      });
-      //memory
-      for (let i = 0; i < 64; i++) {
-        let mem = document.createElement("div");
-        mem.innerHTML = i.toString() + (i > 9 ? "" : "&nbsp;&nbsp;");
-        let inpt = document.createElement("input");
-        inpt.value = getHexStr(cpu.ram.memory[i]);
-        inpt.style.width = "100px";
-        mem.appendChild(inpt);
-        let changebtn = document.createElement("button");
-        changebtn.innerHTML = "修改";
-        let t = i;
-        changebtn.onclick = () => {
-          //check value
-          let val = parseInt(inpt.value, 16);
-          cpu.ram.memory[t] = getBitStr(val);
-        };
-        mem.appendChild(changebtn);
-        ram.push(mem);
-      }
       (function() {
-        //PC
-        let regpc = document.createElement("div");
-        regpc.innerHTML = "pc" + "&nbsp;";
-        let inpt1 = document.createElement("input");
-        inpt1.value = getHexStr(cpu.pc.Value);
-        inpt1.style.width = "100px";
-        regpc.appendChild(inpt1);
-        let changebtn1 = document.createElement("button");
-        changebtn1.innerHTML = "修改";
-        changebtn1.onclick = () => {
-          //check value
-          let val = parseInt(inpt1.value, 16);
-          cpu.pc.Value = getBitStr(val);
-        };
-        regpc.appendChild(changebtn1);
-        regs.push(regpc);
-        memoryInspector.appendChild(regpc);
-        //IR
-        let regir = document.createElement("div");
-        regir.innerHTML = "ir" + "&nbsp;&nbsp;&nbsp;";
-        let inpt2 = document.createElement("input");
-        inpt2.value = getHexStr(cpu.ir.Value);
-        inpt2.style.width = "100px";
-        regir.appendChild(inpt2);
-        let changebtn2 = document.createElement("button");
-        changebtn2.innerHTML = "修改";
-        changebtn2.onclick = () => {
-          //check value
-          let val = parseInt(inpt2.value, 16);
-          cpu.ir.Value = getBitStr(val);
-        };
-        regir.appendChild(changebtn2);
-        regs.push(regir);
-        memoryInspector.appendChild(regir);
-      })();
-      //reg
-      for (let i = 0; i < 32; i++) {
-        let reg = document.createElement("div");
-        reg.innerHTML = "r" + i.toString() + (i > 9 ? "" : "&nbsp;&nbsp;");
-        let inpt = document.createElement("input");
-        inpt.value = getHexStr(cpu.reg.memory[i]);
-        inpt.style.width = "100px";
-        reg.appendChild(inpt);
-        let changebtn = document.createElement("button");
-        changebtn.innerHTML = "修改";
-        let t = i;
-        changebtn.onclick = () => {
-          //check value
-          let val = parseInt(inpt.value, 16);
-          cpu.reg.memory[t] = getBitStr(val);
-        };
-        reg.appendChild(changebtn);
-        regs.push(reg);
-        memoryInspector.appendChild(reg);
-      }
-      let modeSelect = document.getElementById("modeSelect");
-      modeSelect.onclick = () => {
-        if (modeSelect.innerHTML == "查看并修改内存") {
-          for (let i = 0; i < 34; i++) memoryInspector.removeChild(regs[i]);
-          for (let i = 0; i < 64; i++) memoryInspector.appendChild(ram[i]);
-          modeSelect.innerHTML = "查看并修改寄存器";
-        } else {
-          for (let i = 0; i < 64; i++) memoryInspector.removeChild(ram[i]);
-          for (let i = 0; i < 34; i++) memoryInspector.appendChild(regs[i]);
-          modeSelect.innerHTML = "查看并修改内存";
+        const { ipcRenderer } = require("electron");
+        let computer = new Computer([]);
+        // Memory Inspector
+        let instrInspector = document.getElementById("instrs");
+        let microInstrInspector = document.getElementById("mInstrs");
+        let memoryInspector = document.getElementById("memoryInspector");
+        let cpulogger = document.getElementById("waveInspector");
+        let modeSelect = document.getElementById("modeSelect");
+        let asm = document.getElementById("asm");
+        let regs = [];
+        let ram = [];
+        for (let i = 0; i < 64; i++) {
+          let mem = document.createElement("div");
+          mem.innerHTML = i.toString() + (i > 9 ? "" : "&nbsp;&nbsp;");
+          let inpt = document.createElement("input");
+          inpt.value = getHexStr(computer.cpu.ram.memory[i]);
+          inpt.style.width = "100px";
+          mem.appendChild(inpt);
+          let changebtn = document.createElement("button");
+          changebtn.innerHTML = "修改";
+          let t = i;
+          changebtn.onclick = () => {
+            //check value
+            let val = parseInt(inpt.value, 16);
+            computer.cpu.ram.memory[t] = getBitStr(val);
+          };
+          mem.appendChild(changebtn);
+          ram.push(mem);
         }
-      };
-      let asm = document.getElementById("asm");
-      asm.onchange = () => {
-        let files = asm.files;
-        let fr = new FileReader();
-        fr.readAsText(files[0]);
-        fr.onload = () => {
-          while (cpulogger.childNodes.length > 1)
+        //log
+        document.addEventListener("cpulog", e => {
+          if (computer.state == "cRunning") return;
+          let logitem = document.createElement("div");
+          logitem.style.fontSize = "12px";
+          logitem.innerHTML = e.detail;
+          if (cpulogger.childNodes.length > 3000) {
             cpulogger.removeChild(cpulogger.childNodes[1]);
-          loadInstr(fr.result);
-          regs[0].childNodes[1].value = getHexStr(cpu.pc.Value);
-          regs[1].childNodes[1].value = getHexStr(cpu.ir.Value);
-          for (let i = 0; i < 32; i++) {
-            regs[i + 2].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
           }
+          cpulogger.appendChild(logitem);
+          cpulogger.scrollTop = cpulogger.scrollHeight;
+        });
+        function updateMeomry() {
           for (let i = 0; i < 64; i++)
-            ram[i].childNodes[1].value = getHexStr(cpu.ram.memory[i]);
+            ram[i].childNodes[1].value = getHexStr(computer.cpu.ram.memory[i]);
+        }
+        (function() {
+          //PC
+          let regpc = document.createElement("div");
+          regpc.innerHTML = "pc" + "&nbsp;";
+          let inpt1 = document.createElement("input");
+          inpt1.value = getHexStr(computer.cpu.pc.Value);
+          inpt1.style.width = "100px";
+          regpc.appendChild(inpt1);
+          let changebtn1 = document.createElement("button");
+          changebtn1.innerHTML = "修改";
+          changebtn1.onclick = () => {
+            //check value
+            let val = parseInt(inpt1.value, 16);
+            computer.cpu.pc.Value = getBitStr(val);
+          };
+          regpc.appendChild(changebtn1);
+          regs.push(regpc);
+          memoryInspector.appendChild(regpc);
+          //IR
+          let regir = document.createElement("div");
+          regir.innerHTML = "ir" + "&nbsp;&nbsp;&nbsp;";
+          let inpt2 = document.createElement("input");
+          inpt2.value = getHexStr(computer.cpu.ir.Value);
+          inpt2.style.width = "100px";
+          regir.appendChild(inpt2);
+          let changebtn2 = document.createElement("button");
+          changebtn2.innerHTML = "修改";
+          changebtn2.onclick = () => {
+            //check value
+            let val = parseInt(inpt2.value, 16);
+            computer.cpu.ir.Value = getBitStr(val);
+          };
+          regir.appendChild(changebtn2);
+          regs.push(regir);
+          memoryInspector.appendChild(regir);
+          //irr
+          let regirr = document.createElement("div");
+          regirr.innerHTML = "irr" + "&nbsp;&nbsp;";
+          let inpt3 = document.createElement("input");
+          inpt3.value = getHexStr(computer.cpu.irr.value);
+          inpt3.style.width = "100px";
+          regirr.appendChild(inpt3);
+          let changebtn3 = document.createElement("button");
+          changebtn3.innerHTML = "修改";
+          changebtn3.onclick = () => {
+            let val = parseInt(inpt3.value, 16);
+            computer.cpu.irr.value = getBitStr(val);
+          };
+          regirr.appendChild(changebtn3);
+          regs.push(regirr);
+          memoryInspector.appendChild(regirr);
+          //ei
+          let regei = document.createElement("div");
+          regei.innerHTML = "ei" + "&nbsp;&nbsp;&nbsp;";
+          let inpt4 = document.createElement("input");
+          inpt4.value = computer.cpu.ei.value;
+          inpt4.style.width = "100px";
+          regei.appendChild(inpt4);
+          let changebtn4 = document.createElement("button");
+          changebtn4.innerHTML = "修改";
+          changebtn4.onclick = () => {
+            let val = inpt4.value == "0" ? "0" : "1";
+            computer.cpu.ei.value = val;
+          };
+          regei.appendChild(changebtn4);
+          regs.push(regei);
+          memoryInspector.appendChild(regei);
+        })();
+        //reg
+        for (let i = 0; i < 32; i++) {
+          let reg = document.createElement("div");
+          reg.innerHTML = "r" + i.toString() + (i > 9 ? "" : "&nbsp;&nbsp;");
+          let inpt = document.createElement("input");
+          inpt.value = getHexStr(computer.cpu.reg.memory[i]);
+          inpt.style.width = "100px";
+          reg.appendChild(inpt);
+          let changebtn = document.createElement("button");
+          changebtn.innerHTML = "修改";
+          let t = i;
+          changebtn.onclick = () => {
+            //check value
+            let val = parseInt(inpt.value, 16);
+            computer.cpu.reg.memory[t] = getBitStr(val);
+          };
+          reg.appendChild(changebtn);
+          regs.push(reg);
+          memoryInspector.appendChild(reg);
+        }
+        function updateReg() {
+          for (let i = 0; i < 32; i++)
+            regs[i + 4].childNodes[1].value = getHexStr(
+              computer.cpu.reg.memory[i]
+            );
+        }
+        modeSelect.onclick = () => {
+          if (modeSelect.innerHTML == "查看并修改内存") {
+            for (let i = 0; i < 36; i++) memoryInspector.removeChild(regs[i]);
+            for (let i = 0; i < 64; i++) memoryInspector.appendChild(ram[i]);
+            modeSelect.innerHTML = "查看并修改寄存器";
+          } else {
+            for (let i = 0; i < 64; i++) memoryInspector.removeChild(ram[i]);
+            for (let i = 0; i < 36; i++) memoryInspector.appendChild(regs[i]);
+            modeSelect.innerHTML = "查看并修改内存";
+          }
         };
-      };
-      let premInstrpos = 0;
-      let preInstrpos = 0;
-      //clear
-      document.getElementById("clear").onclick = () => {
-        while (cpulogger.childNodes.length > 1)
-          cpulogger.removeChild(cpulogger.childNodes[1]);
-        instrInspector.childNodes[preInstrpos + 1].style.color = "black";
-        microInstrInspector.childNodes[premInstrpos + 1].style.color = "black";
-        instrInspector.childNodes[1].style.color = "red";
-        microInstrInspector.childNodes[1].style.color = "red";
-        preInstrpos = premInstrpos = 0;
-        let instr = cpu.ir.instrMemory;
-        cpu = new CPU(instr, instr.length);
-        regs[0].childNodes[1].value = getHexStr(cpu.pc.Value);
-        regs[1].childNodes[1].value = getHexStr(cpu.ir.Value);
-        for (let i = 0; i < 32; i++) {
-          regs[i + 2].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
-        }
-        for (let i = 0; i < 64; i++)
-          ram[i].childNodes[1].value = getHexStr(cpu.ram.memory[i]);
-      };
-      //continueRun
-      let continueRun = document.getElementById("continue");
-      continueRun.onclick = () => {
-        let pos = cpu.pc.getValue();
-        let over = false;
-        while (!over) {
-          over = cpu.update();
-          regs[0].childNodes[1].value = getHexStr(cpu.pc.Value);
-          regs[1].childNodes[1].value = getHexStr(cpu.ir.Value);
-          for (let i = 0; i < 32; i++) {
-            regs[i + 2].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
+        function updateInstr() {
+          while (instrInspector.childNodes.length > 1)
+            instrInspector.removeChild(instrInspector.childNodes[1]);
+          while (microInstrInspector.childNodes.length > 1)
+            microInstrInspector.removeChild(microInstrInspector.childNodes[1]);
+          let instrs = computer.cpu.program;
+          for (let i = 0; i < instrs.length; i++) {
+            let instr = instrs[i];
+            let instrdiv = document.createElement("div");
+            instrdiv.innerHTML =
+              i.toString() +
+              "&nbsp;" +
+              //getHexStr(bitInstr[i]) +
+              //"&nbsp;&nbsp;" +
+              instr;
+            if (i == computer.cpu.pc.getValue()) instrdiv.style.color = "red";
+            instrInspector.appendChild(instrdiv);
           }
-          for (let i = 0; i < 64; i++)
-            ram[i].childNodes[1].value = getHexStr(cpu.ram.memory[i]);
-        }
-        instrInspector.childNodes[preInstrpos + 1].style.color = "black";
-        microInstrInspector.childNodes[premInstrpos + 1].style.color = "black";
-        let len = cpu.ir.instrMemory.length;
-        preInstrpos = len - 1;
-        instrInspector.childNodes[len].style.color = "red";
-        premInstrpos = microStart[len - 1];
-        microInstrInspector.childNodes[premInstrpos + 1].style.color = "red";
-      };
-      //singleRun
-      let singleRun = document.getElementById("single");
-      singleRun.onclick = () => {
-        let pos = cpu.pc.getValue();
-        let mpos = cpu.microPC;
-        if (pos >= cpu.ir.instrMemory.length) {
-          alert("程序结束！");
-          return;
-        }
-        cpu.updateInstr();
-        instrInspector.childNodes[pos + 1].style.color = "black";
-        microInstrInspector.childNodes[premInstrpos + 1].style.color = "black";
-        if (pos >= cpu.ir.instrMemory.length) {
-          alert("程序结束！");
-          return;
-        }
-        preInstrpos = cpu.pc.getValue();
-        instrInspector.childNodes[preInstrpos + 1].style.color = "red";
-        premInstrpos = microStart[preInstrpos];
-        microInstrInspector.childNodes[premInstrpos + 1].style.color = "red";
-        regs[0].childNodes[1].value = getHexStr(cpu.pc.Value);
-        regs[1].childNodes[1].value = getHexStr(cpu.ir.Value);
-        for (let i = 0; i < 32; i++) {
-          regs[i + 2].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
-        }
-        for (let i = 0; i < 64; i++)
-          ram[i].childNodes[1].value = getHexStr(cpu.ram.memory[i]);
-      };
-      //singleMicroRun
-      let singleMicroRun = document.getElementById("singleMicro");
-      singleMicroRun.onclick = () => {
-        let pos = cpu.pc.getValue();
-        if (pos >= cpu.ir.instrMemory.length) {
-          alert("程序结束！");
-          return;
-        }
-        cpu.update();
-        instrInspector.childNodes[pos + 1].style.color = "black";
-        microInstrInspector.childNodes[premInstrpos + 1].style.color = "black";
-        if (pos >= cpu.ir.instrMemory.length) {
-          alert("程序结束！");
-          return;
-        }
-        preInstrpos = cpu.pc.getValue();
-        instrInspector.childNodes[preInstrpos + 1].style.color = "red";
-        premInstrpos = microStart[preInstrpos] + cpu.microPC;
-        microInstrInspector.childNodes[premInstrpos + 1].style.color = "red";
-        regs[0].childNodes[1].value = getHexStr(cpu.pc.Value);
-        regs[1].childNodes[1].value = getHexStr(cpu.ir.Value);
-        for (let i = 0; i < 32; i++) {
-          regs[i + 2].childNodes[1].value = getHexStr(cpu.reg.memory[i]);
-        }
-        for (let i = 0; i < 64; i++)
-          ram[i].childNodes[1].value = getHexStr(cpu.ram.memory[i]);
-      };
-      //style
-      document.body.style.height = window.innerHeight + "px";
-      document.body.style.width = window.innerWidth + "px";
-      window.onresize = () => {
-        document.body.style.height = window.innerHeight + "px";
-        document.body.style.width = window.innerWidth + "px";
-      };
-      function loadInstr(str) {
-        while (instrInspector.childNodes.length > 1) {
-          instrInspector.removeChild(instrInspector.childNodes[1]);
-        }
-        while (microInstrInspector.childNodes.length > 1) {
-          microInstrInspector.removeChild(microInstrInspector.childNodes[1]);
-        }
-        let instrs = str.split("\n");
-        let bitInstr = parse(str);
-        cpu = new CPU(bitInstr, bitInstr.length);
-        microStart = [0];
-        //instr
-        instrInspector.childNodes.length = 1;
-        microInstrInspector.childNodes.length = 1;
-        for (let i = 0; i < instrs.length; i++) {
-          let instr = instrs[i];
-          let instrdiv = document.createElement("div");
-          instrdiv.innerHTML =
-            i.toString() +
-            "&nbsp;" +
-            getHexStr(bitInstr[i]) +
-            "&nbsp;&nbsp;" +
-            instr;
-          instrInspector.appendChild(instrdiv);
-          let minstr = controller(bitInstr[i].slice(0, 6));
-          microStart[i + 1] = microStart[i] + minstr.length;
-          for (let j = 0; j < minstr.length; j++) {
+          let mInstrs;
+          if (computer.cpu.newInstr) {
+            let instr = computer.cpu.program[computer.cpu.pc.getValue()];
+            mInstrs = controller(instr.slice(0, 6));
+          } else {
+            mInstrs = computer.cpu.microInstr;
+          }
+          for (let i = 0; i < mInstrs.length; i++) {
             let minstrdiv = document.createElement("div");
-            minstrdiv.innerHTML =
-              i.toString() + " " + j.toString() + " " + minstr[j];
+            minstrdiv.innerHTML = i.toString() + " " + mInstrs[i];
+            if (i == computer.cpu.microPC) minstrdiv.style.color = "red";
             microInstrInspector.appendChild(minstrdiv);
           }
         }
-        console.log(microStart);
-        instrInspector.childNodes[1].style.color = "red";
-        microInstrInspector.childNodes[1].style.color = "red";
-      }
+        function update() {
+          regs[0].childNodes[1].value = getHexStr(computer.cpu.pc.Value);
+          regs[1].childNodes[1].value = getHexStr(computer.cpu.ir.Value);
+          regs[2].childNodes[1].value = getHexStr(computer.cpu.irr.value);
+          regs[3].childNodes[1].value = getHexStr(computer.cpu.ei.value);
+          updateReg();
+          updateMeomry();
+          updateInstr();
+        }
+        asm.onchange = () => {
+          let files = asm.files;
+          let fr = new FileReader();
+          fr.readAsText(files[0]);
+          fr.onload = () => {
+            computer = new Computer(parse(fr.result));
+          };
+        };
+        //clear
+        document.getElementById("clear").onclick = () => {
+          let eve = new CustomEvent("stop");
+          document.dispatchEvent(eve);
+          ipcRenderer.send("clear");
+          computer.clear();
+        };
+        //stop
+        document.getElementById("stop").onclick = () => {
+          let eve = new CustomEvent("stop");
+          document.dispatchEvent(eve);
+        };
+        document.addEventListener("init", e => {
+          while (cpulogger.childNodes.length > 1)
+            cpulogger.removeChild(cpulogger.childNodes[1]);
+          computer = e.detail;
+          update();
+        });
+        document.addEventListener("update", () => {
+          update();
+        });
+        //continueRun
+        let continueRun = document.getElementById("continue");
+        continueRun.onclick = () => {
+          computer.continuouslyUpdate();
+          update();
+        };
+        //singleRun
+        let singleRun = document.getElementById("single");
+        singleRun.onclick = () => {
+          computer.updateInstr();
+          update();
+        };
+        //singleMicroRun
+        let singleMicroRun = document.getElementById("singleMicro");
+        singleMicroRun.onclick = () => {
+          computer.update();
+          update();
+        };
+        //style
+        document.body.style.height = window.innerHeight + "px";
+        document.body.style.width = window.innerWidth + "px";
+        window.onresize = () => {
+          document.body.style.height = window.innerHeight + "px";
+          document.body.style.width = window.innerWidth + "px";
+        };
+        ipcRenderer.on("keyDown", (e, word) => {
+          console.log("recv keydown", word);
+          computer.cpu.irr.value = getBitStr(word);
+          regs[2].childNodes[1].value = getHexStr(computer.cpu.irr.value);
+        });
+      })();
     </script>
   </body>
   <style>

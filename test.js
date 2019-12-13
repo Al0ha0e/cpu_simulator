@@ -1,6 +1,25 @@
+const { dialog } = require("electron").remote;
+const { ipcRenderer } = require("electron");
+const fs = require("fs");
 function cpuLog(content) {
   let event = new CustomEvent("cpulog", { detail: content });
   document.dispatchEvent(event);
+}
+class EI {
+  constructor() {
+    this.value = "0";
+  }
+  reverse() {
+    this.value = this.value == "0" ? "1" : "0";
+  }
+}
+class IRR {
+  constructor() {
+    this.value = "00000000000000000000000000000000";
+  }
+  clear() {
+    this.value = "00000000000000000000000000000000";
+  }
 }
 class PC {
   constructor() {
@@ -43,6 +62,7 @@ class IR {
   }
   fetchInstr(id) {
     this.Value = this.instrMemory[id];
+    console.log("FETCH ", this.Value);
     cpuLog(
       "FETCH INSTRUCTION " +
         getHexStr(this.Value) +
@@ -138,7 +158,6 @@ class RAM {
   }
   getOutput() {
     let pos = parseInt(this.addrress, 2);
-    console.log("AAAAAAAAAAAAAAA", this.addrress, pos);
     return this.memory[pos];
   }
   show() {
@@ -201,7 +220,6 @@ class pcController {
       }
     } else {
       if (ALU.zeroFlag == "1") {
-        console.log("ERO!");
         return "0";
       } else {
         return "1";
@@ -212,39 +230,50 @@ class pcController {
 
 function controller(instr) {
   if (instr == "000000") {
-    return ["000000000000"];
+    return ["000000000000000"];
   }
   if (instr == "001000") {
     //SET
-    return ["000000000000", "110000000000"];
-  } else if (instr.slice(0, 3) == "010") {
-    //R
-    let ret = ["000000100000", "1100001000000"];
-    if (instr == "010001") {
-      //PLUS
-      ret[0] = "000000100001";
-      ret[1] = "110000100001";
-    } else if (instr == "010010") {
-      //MINUS
-      ret[0] = "000000100010";
-      ret[1] = "110000100010";
-    }
-    return ret;
+    return ["000000000000000", "110000000000000"];
+  } else if (instr == "010000") {
+    return ["000000110001000", "110000110001000"];
+  } else if (instr == "010001") {
+    //PLUS
+    return ["000000100001000", "110000100001000"];
+  } else if (instr == "010010") {
+    //MINUS
+    return ["000000100010000", "110000100010000"];
+  } else if (instr == "010100") {
+    //IRET
+    return ["000000010001011", "100000010001100"];
+  } else if (instr == "010101") {
+    //EIREV
+    return ["000000000000001", "100000000000000"];
+  } else if (instr == "010110") {
+    //EXE
+    return ["000000000000000", "100000000000000"];
+  } else if (instr == "010111") {
+    //OPEN
+    return ["000000000000000", "100000000000000"];
+  } else if (instr == "000001") {
+    return ["000000000000000", "100000000000000"];
   } else if (instr == "011000") {
     //SW
-    return ["000000010001", "000000010001", "101000010001"];
+    return ["000000010001000", "000000010001000", "101000010001000"];
   } else if (instr == "100000") {
     // LW
-    return ["000000010001", "000000010001", "110001010001"];
+    return ["000000010001000", "000000010001000", "110001010001000"];
   } else if (instr == "101000") {
     //brsm
-    return ["000000000010", "000000000010", "100100000010"];
+    return ["000000000010000", "000000000010000", "100100000010000"];
   } else if (instr == "110000") {
     //breq
-    return ["000000000010", "000000000010", "100110000010"];
+    return ["000000000010000", "000000000010000", "100110000010000"];
   } else if (instr == "111000") {
     //J
-    return ["000010000000", "000010000000", "100010000000"];
+    return ["000010000000000", "000010000000000", "100010000000000"];
+  } else if (instr == "111001") {
+    return ["000000000000000", "100000000000000"];
   }
 }
 function getBitStr(x) {
@@ -256,7 +285,6 @@ function getBitStr(x) {
       ret = ret.concat("0");
     }
   }
-  console.log("BIT STR", ret);
   return ret;
 }
 function getHexStr(x) {
@@ -287,6 +315,8 @@ class CPU {
   }
   init(program, programLength) {
     cpuLog("INIT CPU");
+    this.ei = new EI();
+    this.irr = new IRR();
     this.pc = new PC();
     this.ir = new IR(program);
     this.regmux = new Mux4();
@@ -305,9 +335,9 @@ class CPU {
     this.newInstr = true;
   }
   updateInstr() {
-    this.update();
+    if (this.update()) return true;
     while (!this.newInstr) {
-      this.update();
+      if (this.update()) return true;
     }
     //this.microPC = 0;
   }
@@ -317,12 +347,11 @@ class CPU {
       // Get Instruction
       this.ir.fetchInstr(id);
       this.instr = this.ir.Value;
-      console.log("NEW INSTR", this.instr);
       // Get MircoInstruction
       this.microInstr = controller(this.ir.getInstr());
       this.microPC = 0;
       // STOP
-      if (this.microInstr == "000000000000") {
+      if (this.microInstr == "000000000000000") {
         cpuLog("CPU STOP!");
         return true;
       }
@@ -342,6 +371,12 @@ class CPU {
   executeMircoIsntruction() {
     cpuLog("EXECUTE MICRO INSTRUCTION");
     let instr = this.microInstr[this.microPC];
+    if (instr[13] == "1") {
+      this.irr.clear();
+    }
+    if (instr[14] == "1") {
+      this.ei.reverse();
+    }
     this.pc.PCWR = instr[0];
     this.reg.regWR = instr[1];
     this.ram.memoryWR = instr[2];
@@ -366,12 +401,10 @@ class CPU {
       "REGISTER OUTPUT1 " + getHexStr(op1t) + " OUTPUT2 " + getHexStr(op2)
     );
     let imm = parseInt(this.ir.getImm(), 2);
-    console.log("op1t", op1t, "imm", imm);
     this.alumux.input1 = op1t;
     this.alumux.input2 = imm;
     let op1 = this.alumux.getOutput();
     let aluOtp = this.alu.getOutput(op1, op2);
-    console.log("op1", op1, "op2", op2, "aluOtp", aluOtp);
     let numstr = getBitStr(aluOtp);
     cpuLog(
       "ALU INPUT1 " +
@@ -384,21 +417,126 @@ class CPU {
     this.ram.addrress = numstr;
     this.ram.update(this.reg.getOutput1());
     let ramOtpData = this.ram.getOutput();
-    console.log("ramOtp", ramOtpData);
     this.regmux.input1 = this.ir.getImm();
     this.regmux.input2 = numstr;
     this.regmux.input3 = ramOtpData;
     let dataToReg = this.regmux.getOutput();
-    console.log("dataToReg", dataToReg);
     this.reg.update(dataToReg);
     this.pcmux.sign = this.pcController.getOutput(this.alu);
     let pcmuxOtp = this.pcmux.getOutput();
-    console.log("future pc", pcmuxOtp);
     let tpcValue = parseInt(this.pc.Value, 2) + parseInt(pcmuxOtp, 2);
-    console.log("tpcValue", tpcValue);
-    let pcValue = getBitStr(tpcValue);
+    let pcValue = instr[12] == "1" ? numstr : getBitStr(tpcValue);
     this.pc.update(pcValue);
     this.microPC++;
-    console.log("mPC: ", this.microPC, " PC: ", this.pc.Value);
+  }
+}
+
+class Computer {
+  constructor(program) {
+    this.run = false;
+    document.addEventListener("stop", () => {
+      this.run = false;
+    });
+    this.init(program);
+  }
+  init(program) {
+    this.state = "init";
+    this.cpu = new CPU(program, program.length);
+    this.instrMemory = [program];
+    this.ram = [new RAM()];
+    let event = new CustomEvent("init", { detail: this });
+    document.dispatchEvent(event);
+  }
+  clear() {
+    let program = this.cpu.program;
+    this.init(program);
+  }
+  switchTo(from, to) {
+    console.log("SWITCH", from, to);
+    this.instrMemory[from] = this.cpu.program;
+    this.ram[from] = this.cpu.ram;
+    this.cpu.program = this.cpu.ir.instrMemory = this.instrMemory[to];
+    this.cpu.programLength = this.cpu.program.length;
+    this.cpu.ram = this.ram[to];
+    let event = new CustomEvent("switchTo", { detail: { from: from, to: to } });
+    document.dispatchEvent(event);
+  }
+  interrupt(type) {
+    if (this.cpu.ei.value == "0") return;
+    this.cpu.ei.reverse(); //close interrupt
+    this.cpu.reg.memory[3] = this.cpu.irr.value;
+    this.cpu.reg.memory[2] = this.cpu.pc.Value;
+    let newPC = parseInt(this.cpu.reg.memory[0], 2) + parseInt(type, 2);
+    this.cpu.pc.Value = getBitStr(newPC); //set pc
+    let pid = parseInt(this.cpu.reg.memory[1]);
+    this.switchTo(pid, 0);
+  }
+  update() {
+    let id = this.cpu.pc.getValue();
+    let instr = this.cpu.ir.instrMemory[id];
+    if (this.cpu.newInstr) {
+      if (instr == "01011000000000000000000000000000") {
+        //execute
+        let pid = parseInt(this.cpu.reg.memory[1]);
+        let path = dialog.showOpenDialogSync({ properties: ["openFile"] })[0];
+        this.instrMemory[pid] = parse(fs.readFileSync(path, "utf8"));
+        this.ram[pid] = new RAM();
+        //this.switchTo(0, pid);
+      } else if (instr == "01011100000000000000000000000000") {
+        ipcRenderer.send("openConsole");
+      } else if (instr.slice(0, 6) == "111001") {
+        let r = parseInt(instr.slice(6, 11), 2);
+        ipcRenderer.send("put", parseInt(this.cpu.reg.memory[r], 2));
+      }
+    }
+    if (this.cpu.update()) {
+      this.state = "terminated";
+      return false;
+    }
+    if (this.cpu.newInstr && instr.slice(0, 6) == "010100") {
+      //interruption over
+      let pid = parseInt(this.cpu.reg.memory[1]);
+      this.switchTo(0, pid);
+    } else if (this.cpu.newInstr && instr.slice(0, 6) == "000001") {
+      this.interrupt("01001101");
+    } else if (
+      this.cpu.newInstr &&
+      this.cpu.irr.value != "00000000000000000000000000000000"
+    ) {
+      this.interrupt(0);
+    }
+    if (this.state != "cRunning") this.state = "running";
+    return true;
+  }
+  updateInstr() {
+    if (!this.update()) {
+      this.state = "terminated";
+      return false;
+    }
+    if (this.state != "cRunning") this.state = "running";
+    while (!this.cpu.newInstr) {
+      if (!this.update()) return false;
+    }
+    return true;
+  }
+  sleep(time) {
+    return new Promise(resolve => setTimeout(resolve, time));
+  }
+  continuouslyUpdate() {
+    let that = this;
+    that.run = true;
+    this.state = "cRunning";
+    let eve = new CustomEvent("update");
+    (async function() {
+      while (that.updateInstr()) {
+        await that.sleep(0.5);
+        document.dispatchEvent(eve);
+        if (!that.run) {
+          that.state = "running";
+          return;
+        }
+      }
+      that.state = "terminated";
+    })();
   }
 }

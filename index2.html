@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>cpu_simulator</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="script-src 'self' 'unsafe-inline';"
+    />
+  </head>
+  <body>
+    <div id="con">
+    <script>
+      (function() {
+        const { ipcRenderer } = require("electron");
+        let container = document.getElementById("con");
+        let currDiv = document.createElement("div");
+        let str = "> ";
+        currDiv.innerHTML = str;
+        container.appendChild(currDiv);
+        document.onkeydown = e => {
+          ipcRenderer.send("keyDown", { keyCode: e.keyCode });
+        };
+        ipcRenderer.on("put", (e, word) => {
+          console.log("recv put",word);
+          let numword = parseInt(word);
+            if(word==13){
+              console.log("ENTER");
+              currDiv = document.createElement("div");
+              str = "> ";
+              currDiv.innerHTML = str;
+              container.appendChild(currDiv);
+            }else if(numword==32){
+              str += " ";
+              currDiv.innerHTML = str;
+            }
+            else if(numword>=65 && numword<=90){
+              console.log(word);
+              str += String.fromCharCode(word);
+              currDiv.innerHTML = str;
+            } else if(numword>=48 && numword<=57){
+              str += String.fromCharCode(word);
+              currDiv.innerHTML = str;
+            } else if(numword==8){
+              if(str.length>2){str = str.slice(0,str.length-1);}
+              currDiv.innerHTML = str;
+            }else if(numword<=2){
+              str += numword;
+              currDiv.innerHTML = str;
+            }else{
+              str += "?";
+              currDiv.innerHTML = str;
+            }
+        });
+      })();
+    </script>
+  </body>
+  <style>
+    body {
+      overflow: hidden;
+    }
+  </style>
+</html>
