@@ -21,7 +21,7 @@
   },
   "homepage": "https://github.com/Al0ha0e/cpu_simulator#readme",
   "devDependencies": {
-    "electron": "^7.1.2",
+    "electron": "^9.4.0",
     "electron-packager": "^14.1.1"
   }
 }
